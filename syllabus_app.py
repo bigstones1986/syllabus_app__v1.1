@@ -8,31 +8,39 @@ def create_html_content(df_to_render):
     """
     all_syllabi_parts = []
     for index, row in df_to_render.iterrows():
-        # --- データ抽出 ---
+        # データ抽出
         kamoku_mei = str(row.get('授業科目', '')).replace('～', '-')
         if not kamoku_mei: continue
         
         kamoku_numbering = row.get('科目ナンバリング', '')
         tanin_kyoin = row.get('担当教員', '')
-        # kaiko_nendoは不要なので削除
         kaiko_ki = row.get('開講期', '')
         kaiko_nenji = row.get('開講年次', '')
-        # ▼▼▼「単位数」の重複表示を修正 ▼▼▼
-        tani = str(row.get('単位', '')).replace('.00', '') # 末尾の「+ "単位"」を削除
+        tani = str(row.get('単位', '')).replace('.00', '')
         jugyo_keitai = row.get('授業形態', '')
         theme_goal = str(row.get('テーマ(ねらい)及び到達目標', '')).replace('<br>', '<br/>')
         gaiyo = str(row.get('授業概要', '')).replace('<br>', '<br/>')
         dp_info = str(row.get('DPとの対応', '')).replace('<br>', '<br/>')
         sonota_info = str(row.get('その他', '')).replace('<br>', '<br/>')
 
-        # 授業計画の整形
+        # ▼▼▼ 授業計画を15回と30回の両方に対応できるよう修正 ▼▼▼
         keikaku_list_items = ""
-        for i in range(1, 16):
-            col_name = f'授業計画(15回)（第{i}回）'
+        # まず30回コース用の列が存在するかチェック
+        if f'授業計画(30回)（第1回）' in row and pd.notna(row[f'授業計画(30回)（第1回）']):
+            num_sessions = 30
+            base_col_name = '授業計画(30回)'
+        # 存在しない場合は15回コースとして処理
+        else:
+            num_sessions = 15
+            base_col_name = '授業計画(15回)'
+
+        for i in range(1, num_sessions + 1):
+            col_name = f'{base_col_name}（第{i}回）'
             plan = str(row.get(col_name, ''))
             if plan:
                 plan_clean = re.sub('<[^<]+?>', '', plan).strip()
                 keikaku_list_items += f"<li><strong>第{i}回</strong>: {plan_clean}</li>"
+        # ▲▲▲ ここまでが修正部分 ▲▲▲
 
         # 成績評価の整形
         hyoka_hoho = str(row.get('評価方法', '')).replace('<br>', '<br/>')
@@ -61,7 +69,7 @@ def create_html_content(df_to_render):
             <h1>{kamoku_mei}</h1>
             <div class="section-box"><h2>科目基本情報</h2><ul>
                 <li><strong>科目ナンバリング</strong>: {kamoku_numbering}</li><li><strong>担当教員</strong>: {tanin_kyoin}</li>
-                {'' if not kaiko_ki else f"<li><strong>開講年度・学期</strong>: {kaiko_ki}</li>"}
+                <li><strong>開講年度・学期</strong>: {kaiko_ki}</li>
                 <li><strong>開講年次</strong>: {kaiko_nenji}</li>
                 <li><strong>単位数</strong>: {tani}</li>
                 <li><strong>授業形態</strong>: {jugyo_keitai}</li>
@@ -76,7 +84,7 @@ def create_html_content(df_to_render):
             <div class="section-box"><h2>その他</h2><p>{sonota_info}</p></div>
             <div class="section-box"><h2>教科書・参考書</h2><p><strong>教科書</strong>:</p><ul>{textbooks_list_items}</ul><p><strong>参考書</strong>:</p><ul>{references_list_items}</ul></div>
         </div>
-        """ # ▲▲▲「開講年度・学期」の表示を修正 ▲▲▲
+        """
         all_syllabi_parts.append(syllabus_part)
     
     st_style = """
@@ -102,7 +110,6 @@ def create_html_content(df_to_render):
 # --- ここからメインのアプリ処理 ---
 st.set_page_config(page_title="シラバス整形・検索アプリ", page_icon="🗂️", layout="wide")
 
-# サイドバーの横幅を調整
 st.markdown("""<style>[data-testid="stSidebar"] {width: 400px !important;}</style>""", unsafe_allow_html=True)
 
 st.sidebar.title("🗂️ 操作パネル")
@@ -136,7 +143,6 @@ if uploaded_file is not None:
 
         st.title("📚 シラバス整形・検索結果")
         
-        # フィルタリングと並び替え
         df_filtered = df.copy()
         if selected_options:
             escaped_options = [re.escape(opt) for opt in selected_options]
